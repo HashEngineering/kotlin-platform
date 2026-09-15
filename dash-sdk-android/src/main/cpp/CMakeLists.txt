@@ -34,8 +34,27 @@ set(C_SOURCE_FILE ${CMAKE_SOURCE_DIR}/../../../../dash-sdk-java/build/generated/
 # Define the Rust libraryn config
 set(RUST_LIB_NAME "dash_sdk_bindings")
 set(RUST_LIB_FILE "lib${RUST_LIB_NAME}.a")
-set(RUST_LIB_OUTPUT_PATH "${CMAKE_SOURCE_DIR}/../rust/target/${RUST_TARGET_TRIPLE}/release/${RUST_LIB_FILE}")
 set(RUST_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../rust")
+# Cargo may redirect its target directory (CARGO_TARGET_DIR, or build.target-dir
+# in ~/.cargo/config.toml), so ask cargo where it writes instead of assuming
+# ../rust/target. Otherwise we link a stale local copy of the static library.
+# Override with -DCARGO_TARGET_DIR=/path if needed.
+if(NOT DEFINED CARGO_TARGET_DIR)
+    execute_process(
+        COMMAND cargo +nightly metadata --format-version 1 --no-deps
+        WORKING_DIRECTORY ${RUST_SOURCE_DIR}
+        OUTPUT_VARIABLE CARGO_METADATA
+        RESULT_VARIABLE CARGO_METADATA_RESULT
+        ERROR_QUIET)
+    if(CARGO_METADATA_RESULT EQUAL 0 AND CARGO_METADATA MATCHES "\"target_directory\":\"([^\"]+)\"")
+        set(CARGO_TARGET_DIR "${CMAKE_MATCH_1}")
+    else()
+        message(WARNING "cargo metadata failed; assuming ${RUST_SOURCE_DIR}/target")
+        set(CARGO_TARGET_DIR "${RUST_SOURCE_DIR}/target")
+    endif()
+endif()
+set(RUST_LIB_OUTPUT_PATH "${CARGO_TARGET_DIR}/${RUST_TARGET_TRIPLE}/release/${RUST_LIB_FILE}")
+message(STATUS "Rust library: ${RUST_LIB_OUTPUT_PATH}")
 file(
     GLOB_RECURSE
     RUST_PROJECT_FILES "${RUST_SOURCE_DIR}/build.rs"
